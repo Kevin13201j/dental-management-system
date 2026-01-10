@@ -10,9 +10,14 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  // Endpoint REST para registrar usuarios (Req #15)
   @Post('register')
   async register(@Body() body: any) {
     return this.appService.createUser(body);
+  }
+
+  // Endpoint de Login (Nuevo)
+  @Post('login')
+  async login(@Body() body: any) {
+    return this.appService.login(body);
   }
 }
