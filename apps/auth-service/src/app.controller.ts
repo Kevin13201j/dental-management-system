@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 import { AppService } from './app.service';
 
 @Controller()
@@ -8,5 +8,11 @@ export class AppController {
   @Get()
   getHello(): string {
     return this.appService.getHello();
+  }
+
+  // Endpoint REST para registrar usuarios (Req #15)
+  @Post('register')
+  async register(@Body() body: any) {
+    return this.appService.createUser(body);
   }
 }
