@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { JwtModule } from '@nestjs/jwt'; // <--- Nuevo
+import { JwtModule } from '@nestjs/jwt';
+import { ClientsModule, Transport } from '@nestjs/microservices'; // <--- IMPORTANTE
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { User } from './user.entity';
 
 @Module({
   imports: [
+    // 1. BASE DE DATOS (Se mantiene igual)
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: 'localhost',
@@ -18,11 +20,27 @@ import { User } from './user.entity';
       synchronize: true,
     }),
     TypeOrmModule.forFeature([User]),
-    // Configuración de Seguridad (JWT) - Req #5
+
+    // 2. SEGURIDAD JWT (Se mantiene igual)
     JwtModule.register({
-      secret: 'SECRET_KEY_DENTAL_123', // En producción esto va en variables de entorno (.env)
-      signOptions: { expiresIn: '1h' }, // El token expira en 1 hora
+      secret: 'SECRET_KEY_DENTAL_123',
+      signOptions: { expiresIn: '1h' },
     }),
+
+    // 3. RABBITMQ (ESTO ES LO NUEVO PARA REQ #16)
+    ClientsModule.register([
+      {
+        name: 'NOTIFICATIONS_SERVICE',
+        transport: Transport.RMQ,
+        options: {
+          urls: ['amqp://admin:adminpassword@localhost:5672'],
+          queue: 'notifications_queue',
+          queueOptions: {
+            durable: false,
+          },
+        },
+      },
+    ]),
   ],
   controllers: [AppController],
   providers: [AppService],
