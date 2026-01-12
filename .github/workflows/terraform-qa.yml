@@ -1,0 +1,44 @@
+name: 'Terraform QA Deployment'
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'infrastructure/QA/**'
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    name: 'Terraform Plan & Validate'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infrastructure/QA
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.9.0
+
+    - name: Terraform Init
+      run: terraform init
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        AWS_REGION: 'us-east-1'
+
+    - name: Terraform Validate
+      run: terraform validate
+
+    - name: Terraform Plan
+      run: terraform plan
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        AWS_REGION: 'us-east-1'
