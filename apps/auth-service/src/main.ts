@@ -16,6 +16,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document); // La docs estará en /api/docs
 
-  await app.listen(3000);
+  // En apps/auth-service/src/main.ts
+  await app.listen(3001); 
+  console.log('Auth Service is running on: http://localhost:3001');
 }
 bootstrap();

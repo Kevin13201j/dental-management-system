@@ -1,0 +1,29 @@
+{
+  "monorepo": true,
+  "root": "apps/dental-management-system",
+  "sourceRoot": "apps/dental-management-system/src",
+  "compilerOptions": {
+    "webpack": true,
+    "tsConfigPath": "apps/dental-management-system/tsconfig.app.json"
+  },
+  "projects": {
+    "api-gateway": {
+      "type": "application",
+      "root": "apps/api-gateway",
+      "entryFile": "main",
+      "sourceRoot": "apps/api-gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
+      }
+    },
+    "dental-management-system": {
+      "type": "application",
+      "root": "apps/dental-management-system",
+      "entryFile": "main",
+      "sourceRoot": "apps/dental-management-system/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/dental-management-system/tsconfig.app.json"
+      }
+    }
+  }
+}
