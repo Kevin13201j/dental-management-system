@@ -1,7 +1,7 @@
 # =========================================================================
 # QA INFRASTRUCTURE - DENTAL MANAGEMENT SYSTEM
 # Author: Kevin
-# Description: Isolated Network (VPC), Public Subnet, and Bastion Host.
+# Description: Red Aislada, Bastion y Microservicios (Corregido)
 # =========================================================================
 
 terraform {
@@ -13,11 +13,8 @@ terraform {
   }
 }
 
-# AWS Provider Configuration
-# Credentials will be loaded from environment variables (AWS Academy)
 provider "aws" {
   region = "us-east-1"
-  
   default_tags {
     tags = {
       Project     = "DentalManagement"
@@ -27,134 +24,134 @@ provider "aws" {
   }
 }
 
-# =========================================================================
-# 1. VPC (Virtual Private Cloud) - The Isolated Network
-# =========================================================================
-resource "aws_vpc" "qa_vpc" {
-  cidr_block           = "10.0.0.0/16" # Exclusive IP range for QA
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = {
-    Name = "dental-qa-vpc"
-  }
+# 1. VARIABLE (Para que no falle var.ambiente)
+variable "ambiente" {
+  default = "QA"
 }
 
-# Internet Gateway (IGW)
-# Allows the VPC to communicate with the outside world
+# 2. VPC
+resource "aws_vpc" "qa_vpc" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  tags = { Name = "dental-qa-vpc" }
+}
+
 resource "aws_internet_gateway" "qa_igw" {
   vpc_id = aws_vpc.qa_vpc.id
-
-  tags = {
-    Name = "dental-qa-igw"
-  }
+  tags = { Name = "dental-qa-igw" }
 }
 
-# =========================================================================
-# 2. PUBLIC SUBNET (DMZ Zone)
-# =========================================================================
-# This subnet will host the Bastion Host and Load Balancers.
+# 3. SUBREDES (Pública y Privada)
+
+# A. PÚBLICA (Bastion)
 resource "aws_subnet" "qa_public_subnet" {
   vpc_id                  = aws_vpc.qa_vpc.id
-  cidr_block              = "10.0.1.0/24" # Sub-range for public resources
+  cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-1a"
-  map_public_ip_on_launch = true # Automatically assign public IP
-
-  tags = {
-    Name = "dental-qa-subnet-public"
-  }
+  map_public_ip_on_launch = true
+  tags = { Name = "dental-qa-subnet-public" }
 }
 
-# Route Table for Public Access
 resource "aws_route_table" "qa_public_rt" {
   vpc_id = aws_vpc.qa_vpc.id
-
   route {
-    cidr_block = "0.0.0.0/0" # Route all external traffic to IGW
+    cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.qa_igw.id
-  }
-
-  tags = {
-    Name = "dental-qa-rt-public"
   }
 }
 
-# Route Table Association
 resource "aws_route_table_association" "qa_public_assoc" {
   subnet_id      = aws_subnet.qa_public_subnet.id
   route_table_id = aws_route_table.qa_public_rt.id
 }
 
-# =========================================================================
-# 3. SECURITY (Firewalls / Security Groups)
-# =========================================================================
+# B. PRIVADA (Microservicios) - ¡ESTA FALTABA!
+resource "aws_subnet" "qa_private_subnet" {
+  vpc_id            = aws_vpc.qa_vpc.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-east-1a"
+  tags = { Name = "dental-qa-subnet-private" }
+}
 
-# Security Group for BASTION HOST
-# Strict Rule: Only allow SSH (Port 22)
+# 4. SEGURIDAD
+
 resource "aws_security_group" "bastion_sg" {
-  name        = "dental-qa-bastion-sg"
-  description = "Security Group for Bastion Host"
-  vpc_id      = aws_vpc.qa_vpc.id
+  name   = "dental-qa-bastion-sg"
+  vpc_id = aws_vpc.qa_vpc.id
 
-  # INGRESS: Allow SSH traffic
   ingress {
-    description = "SSH from Internet"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # In production, restrict to admin IP
+    cidr_blocks = ["0.0.0.0/0"]
   }
-
-  # EGRESS: Allow all outbound traffic (for updates)
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
 
-  tags = {
-    Name = "dental-qa-bastion-sg"
+resource "aws_security_group" "app_sg" {
+  name   = "dental-app-sg-${var.ambiente}"
+  vpc_id = aws_vpc.qa_vpc.id # Corregido (antes decia main_vpc)
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [aws_vpc.qa_vpc.cidr_block]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-# =========================================================================
-# 4. EC2 INSTANCE (Bastion Host)
-# =========================================================================
+# 5. INSTANCIAS
 
-# Data Source: Get the latest Ubuntu 22.04 AMI dynamically
+# Buscador de Ubuntu (Uno solo para todos)
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477"] # Canonical (Ubuntu Creator)
-
+  owners      = ["099720109477"]
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
 }
 
-# The Bastion Server
+# Bastion Host
 resource "aws_instance" "bastion_host" {
-  ami           = data.aws_ami.ubuntu.id # Uses the latest image found above
-  instance_type = "t2.micro"             # Free tier eligible
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t2.micro"
   subnet_id     = aws_subnet.qa_public_subnet.id
-  
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
-  key_name               = "vockey" # AWS Academy default key
+  key_name      = "vockey"
+  tags = { Name = "Dental-QA-BastionHost" }
+}
+
+# App Server (Microservicios)
+resource "aws_instance" "app_server" {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.qa_private_subnet.id # Corregido (ahora sí existe)
+  key_name      = "vockey"
+  vpc_security_group_ids = [aws_security_group.app_sg.id]
+
+  user_data = <<-EOF
+              #!/bin/bash
+              apt-get update -y
+              apt-get install -y docker.io git curl
+              systemctl start docker
+              systemctl enable docker
+              usermod -aG docker ubuntu
+              EOF
 
   tags = {
-    Name = "Dental-QA-BastionHost"
-    Role = "Bastion/JumpBox"
+    Name        = "dental-app-server-${var.ambiente}"
+    Environment = var.ambiente
   }
-}
-
-# Output: Display the Public IP after creation
-output "bastion_public_ip" {
-  value       = aws_instance.bastion_host.public_ip
-  description = "Public IP of the Bastion Host for SSH access"
 }
