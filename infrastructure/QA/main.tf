@@ -155,3 +155,127 @@ resource "aws_instance" "app_server" {
     Environment = var.ambiente
   }
 }
+
+# =========================================================================
+# 6. BALANCEADOR DE CARGA (ALB) - La Puerta de Entrada Web
+# =========================================================================
+
+# A. Security Group del Balanceador (Acepta tráfico web de todo el mundo)
+resource "aws_security_group" "alb_sg" {
+  name        = "dental-alb-sg-${var.ambiente}"
+  description = "Permitir HTTP desde internet"
+  vpc_id      = aws_vpc.qa_vpc.id
+
+  ingress {
+    description = "HTTP desde cualquier lugar"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# B. El Balanceador (ALB)
+resource "aws_lb" "app_alb" {
+  name               = "dental-alb-${var.ambiente}"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  
+  # El ALB necesita estar en subredes públicas (Al menos 2 zonas por regla de AWS, 
+  # pero usaremos la misma para este laboratorio académico si solo tenemos una)
+  subnets            = [aws_subnet.qa_public_subnet.id, aws_subnet.qa_public_subnet_2.id] 
+
+  tags = {
+    Name = "dental-alb-${var.ambiente}"
+  }
+}
+
+# TRUCO: Como el ALB exige 2 subredes en zonas distintas, creamos una "falsa" rapido
+# Solo para cumplir el requisito de AWS. Copia esto antes del ALB:
+resource "aws_subnet" "qa_public_subnet_2" {
+  vpc_id            = aws_vpc.qa_vpc.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "us-east-1b" # Zona Diferente (B)
+  tags = { Name = "dental-qa-subnet-public-2" }
+}
+
+# C. Target Group (Hacia dónde apunta el ALB)
+resource "aws_lb_target_group" "app_tg" {
+  name     = "dental-tg-${var.ambiente}"
+  port     = 3000   # Tu App corre en puerto 3000 (NestJS)
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.qa_vpc.id
+  
+  health_check {
+    path                = "/"     # Verifica si la app responde en la raiz
+    healthy_threshold   = 2
+    unhealthy_threshold = 10
+  }
+}
+
+# D. Listener (El oido del ALB)
+resource "aws_lb_listener" "front_end" {
+  load_balancer_arn = aws_lb.app_alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app_tg.arn
+  }
+}
+
+# E. Conectar el Servidor al Grupo
+resource "aws_lb_target_group_attachment" "app_attachment" {
+  target_group_arn = aws_lb_target_group.app_tg.arn
+  target_id        = aws_instance.app_server.id
+  port             = 3000
+}
+
+# OUTPUT FINAL: El Link de tu Pagina Web
+output "website_url" {
+  value = "http://${aws_lb.app_alb.dns_name}"
+}
+
+# =========================================================================
+# 7. NAT GATEWAY (Internet para la Red Privada)
+# =========================================================================
+
+# IP Elástica para el NAT
+resource "aws_eip" "nat_eip" {
+  domain = "vpc"
+}
+
+# El NAT Gateway (Vive en la pública para salir a la calle)
+resource "aws_nat_gateway" "qa_nat" {
+  allocation_id = aws_eip.nat_eip.id
+  subnet_id     = aws_subnet.qa_public_subnet.id
+
+  tags = { Name = "dental-qa-nat" }
+}
+
+# Tabla de Rutas Privada (Todo el tráfico de salida va al NAT)
+resource "aws_route_table" "qa_private_rt" {
+  vpc_id = aws_vpc.qa_vpc.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.qa_nat.id
+  }
+
+  tags = { Name = "dental-qa-rt-private" }
+}
+
+# Asociar la tabla privada a tu subred privada
+resource "aws_route_table_association" "qa_private_assoc" {
+  subnet_id      = aws_subnet.qa_private_subnet.id
+  route_table_id = aws_route_table.qa_private_rt.id
+}
