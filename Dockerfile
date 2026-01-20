@@ -20,7 +20,7 @@ ARG APP_NAME=api-gateway
 ENV APP_NAME=${APP_NAME}
 
 # 7. Construimos la aplicación específica
-RUN npm run build ${APP_NAME}
+RUN npx turbo run build --filter=${APP_NAME}
 
 # 8. Encendemos el motor
 CMD node dist/apps/${APP_NAME}/main
