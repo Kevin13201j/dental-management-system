@@ -207,19 +207,39 @@ resource "aws_subnet" "qa_public_subnet_2" {
   tags = { Name = "dental-qa-subnet-public-2" }
 }
 
-# C. Target Group (Hacia dónde apunta el ALB)
+# C. Target Group del Gateway (Puerto 3000)
 resource "aws_lb_target_group" "app_tg" {
   name     = "dental-tg-${var.ambiente}"
-  port     = 3000   # Tu App corre en puerto 3000 (NestJS)
+  port     = 3000
   protocol = "HTTP"
-  vpc_id   = aws_vpc.qa_vpc.id
+  vpc_id   = aws_vpc.qa_vpc.id # Usamos el nombre exacto de tu código
   
   health_check {
-    path                = "/"     # Verifica si la app responde en la raiz
-    healthy_threshold   = 2
-    unhealthy_threshold = 10
+    path                = "/" 
+    interval            = 30   # Revisa cada 30 segundos
+    timeout             = 10   # Espera 10 segundos la respuesta
+    healthy_threshold   = 2    # 2 éxitos para estar "Sano"
+    unhealthy_threshold = 5    # 5 fallos para estar "Caído"
   }
 }
+# Target Group: Auth
+resource "aws_lb_target_group" "auth_tg" {
+  name     = "dental-auth-tg"
+  port     = 3001
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.qa_vpc.id
+  health_check { path = "/" }
+}
+
+# Target Group: Appointments
+resource "aws_lb_target_group" "appointments_tg" {
+  name     = "dental-appointments-tg"
+  port     = 3002
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.qa_vpc.id
+  health_check { path = "/" }
+}
+
 
 # D. Listener (El oido del ALB)
 resource "aws_lb_listener" "front_end" {
@@ -278,4 +298,42 @@ resource "aws_route_table" "qa_private_rt" {
 resource "aws_route_table_association" "qa_private_assoc" {
   subnet_id      = aws_subnet.qa_private_subnet.id
   route_table_id = aws_route_table.qa_private_rt.id
+}
+
+# =========================================================================
+# 8. CONFIGURACIÓN DE MICROSERVICIOS (Ruteo por Path)
+# =========================================================================
+
+# --- A. REGLA PARA AUTH-SERVICE (Puerto 3001) ---
+resource "aws_lb_listener_rule" "auth_rule" {
+  listener_arn = aws_lb_listener.front_end.arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.auth_tg.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/auth*"]
+    }
+  }
+}
+
+# --- B. REGLA PARA APPOINTMENTS-SERVICE (Puerto 3002) ---
+resource "aws_lb_listener_rule" "appointments_rule" {
+  listener_arn = aws_lb_listener.front_end.arn
+  priority     = 20
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.appointments_tg.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/appointments*"]
+    }
+  }
 }
