@@ -29,5 +29,5 @@ ENV APP_NAME=${APP_NAME}
 # 7. Construimos (Aquí ya no fallará por falta de librerías)
 RUN npx turbo run build --filter=${APP_NAME}
 
-# 8. Encendemos el motor
-CMD node dist/apps/${APP_NAME}/main
+# 8. Encendemos el motor (CORREGIDO PARA TURBOREPO)
+CMD ["sh", "-c", "node apps/${APP_NAME}/dist/main"]
