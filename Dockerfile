@@ -1,6 +1,9 @@
 # 1. Usamos una imagen ligera de Node.js como base
 FROM node:18-alpine
 
+# --- ADICIÓN NECESARIA: Instalamos el CLI de Nest globalmente ---
+RUN npm install -g @nestjs/cli
+
 # 2. Creamos la carpeta de trabajo dentro del contenedor
 WORKDIR /usr/src/app
 
@@ -8,6 +11,9 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
+
+# --- ADICIÓN NECESARIA: Copiamos el archivo de configuración de Turbo ---
+COPY turbo.json ./
 
 # 4. Instalamos las dependencias
 RUN npm install
