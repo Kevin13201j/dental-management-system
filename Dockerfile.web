@@ -1,0 +1,21 @@
+FROM node:18-alpine
+WORKDIR /usr/src/app
+
+# Copiamos TODOS los package.json para que npm reconozca los workspaces
+COPY package*.json ./
+COPY apps/web-portal/package*.json ./apps/web-portal/
+COPY apps/api-gateway/package*.json ./apps/api-gateway/
+COPY apps/auth-service/package*.json ./apps/auth-service/
+
+# Instalación global y local profunda
+RUN npm install -g vite @nestjs/cli turbo
+RUN npm install --include=dev
+
+# Copiamos el resto del código
+COPY . .
+
+# Build forzando el uso de dependencias locales
+RUN npx turbo run build --filter=web-portal
+
+# Comando para previsualizar la web en el puerto 3000
+CMD ["sh", "-c", "npx vite preview --port 3000 --host"]
